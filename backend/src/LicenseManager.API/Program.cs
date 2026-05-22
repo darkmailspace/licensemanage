@@ -1,7 +1,10 @@
 using System.Text;
 using LicenseManager.API.Authorization;
+using LicenseManager.API.Hangfire;
 using LicenseManager.API.Middleware;
 using LicenseManager.Infrastructure;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -63,6 +66,50 @@ builder.Services.AddSwaggerGen(c =>
 
 // Infrastructure (DbContext, services, current user, JWT, password hashing, MFA)
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// =============================================================================
+// HANGFIRE (Background jobs - storage, server, dashboard auth filter)
+// =============================================================================
+var hangfireConnectionString = builder.Configuration.GetConnectionString("Hangfire")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException(
+        "No connection string found for Hangfire. Set ConnectionStrings:Hangfire or ConnectionStrings:DefaultConnection.");
+
+var hangfireSchema = builder.Configuration["Hangfire:SchemaName"] ?? "hangfire";
+var prepareSchema = builder.Configuration.GetValue<bool?>("Hangfire:PrepareSchemaIfNecessary") ?? true;
+
+builder.Services.AddHangfire((sp, config) =>
+{
+    config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(hangfireConnectionString),
+            new PostgreSqlStorageOptions
+            {
+                SchemaName = hangfireSchema,
+                PrepareSchemaIfNecessary = prepareSchema,
+                QueuePollInterval = TimeSpan.FromSeconds(15),
+                InvisibilityTimeout = TimeSpan.FromMinutes(30),
+                DistributedLockTimeout = TimeSpan.FromMinutes(1),
+                UseNativeDatabaseTransactions = true,
+            });
+});
+
+builder.Services.AddHangfireServer(options =>
+{
+    var configuredWorkers = builder.Configuration.GetValue<int?>("Hangfire:WorkerCount") ?? 0;
+    options.WorkerCount = configuredWorkers > 0
+        ? configuredWorkers
+        : Math.Max(Environment.ProcessorCount * 2, 4);
+
+    var queues = builder.Configuration.GetSection("Hangfire:Queues").Get<string[]>();
+    options.Queues = queues is { Length: > 0 } ? queues : new[] { "critical", "default", "low" };
+
+    options.ServerName = $"licensemanager-{Environment.MachineName}";
+});
+
+builder.Services.AddSingleton<HangfireDashboardAuthorizationFilter>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -153,6 +200,18 @@ app.UseAuthorization();
 
 // API request logging middleware (after auth so we know the user)
 app.UseMiddleware<ApiLoggingMiddleware>();
+
+// =============================================================================
+// HANGFIRE DASHBOARD
+// =============================================================================
+var hangfireDashboardPath = builder.Configuration["Hangfire:DashboardPath"] ?? "/hangfire";
+app.UseHangfireDashboard(hangfireDashboardPath, new DashboardOptions
+{
+    DashboardTitle = "License Manager Jobs",
+    Authorization = new[] { app.Services.GetRequiredService<HangfireDashboardAuthorizationFilter>() },
+    DisplayStorageConnectionString = false,
+    IgnoreAntiforgeryToken = false,
+});
 
 app.MapControllers();
 
