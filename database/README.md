@@ -28,7 +28,15 @@ psql -d license_manager
 \i migrations/001_initial_schema.sql
 \i seeds/002_seed_data.sql
 \i migrations/003_functions_and_views.sql
+\i migrations/004_system_settings.sql
+\i migrations/005_payments.sql
 ```
+
+> **Phase 4C note:** Migration `005_payments.sql` adds the `payments`,
+> `refunds`, and `webhook_events` tables that back the Razorpay + Stripe
+> payment subsystem. The same schema can alternatively be applied through
+> EF Core's tooling — see [_EF Core migrations_](#ef-core-migrations) below.
+> Apply via SQL **or** via EF, never both.
 
 #### 3. Verify Installation
 
@@ -76,6 +84,13 @@ SELECT * FROM license_products;
 - **audit_logs** - System-wide audit trail
 - **api_logs** - API request/response logs
 - **login_history** - Admin login attempts
+- **system_settings** - Key-value runtime configuration
+
+#### Payments (Phase 4C)
+- **payments** - Provider-agnostic payment lifecycle (Stripe / Razorpay)
+- **refunds** - Refund records linked to a payment, full or partial
+- **webhook_events** - Inbound provider webhooks; UNIQUE on
+  (provider, provider_event_id) provides at-most-once processing
 
 ### Useful Views
 
@@ -180,12 +195,43 @@ All critical columns are indexed:
 - Frequently queried columns (email, license_key, status, dates)
 - Soft delete flags (is_deleted)
 
+### EF Core migrations
+
+The Phase 4C tables are also expressed as a proper EF Core migration in
+`backend/src/LicenseManager.Infrastructure/Migrations/`:
+
+```
+20260522120000_Phase4C_Payments.cs            # Up / Down for the 3 tables
+20260522120000_Phase4C_Payments.Designer.cs   # Designer companion
+ApplicationDbContextModelSnapshot.cs          # Phase 4C-only snapshot
+```
+
+To apply via EF tooling instead of the `005_payments.sql` script:
+
+```bash
+dotnet ef database update \
+  --project        backend/src/LicenseManager.Infrastructure \
+  --startup-project backend/src/LicenseManager.API
+```
+
+The migration is idempotent against EF's `__EFMigrationsHistory` table and
+is safe to run on a database that already has the existing twenty tables
+in place (it does not touch them, only adds the three new ones).
+
+> **Snapshot scope:** the EF model snapshot covers only the three Phase 4C
+> entities. The other twenty entities continue to be managed through the
+> hand-authored SQL migrations (`001`–`004`). Adopting EF migrations as the
+> primary mechanism for the whole model is a separate, larger refactor —
+> see the comment in `ApplicationDbContextModelSnapshot.cs` for the
+> required steps.
+
 ### Data Retention
 
 - **audit_logs**: Recommend archiving after 1 year
 - **api_logs**: Recommend archiving after 6 months
 - **license_validations**: Recommend archiving after 6 months
 - **login_history**: Recommend archiving after 1 year
+- **webhook_events**: Recommend archiving after 90 days
 
 ### Security Considerations
 
