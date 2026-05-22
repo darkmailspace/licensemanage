@@ -1,14 +1,23 @@
+using System.Security.Claims;
 using Hangfire.Dashboard;
 
 namespace LicenseManager.API.Hangfire;
 
 /// <summary>
 /// Authorization filter for the Hangfire dashboard.
-/// In Development: anonymous access is allowed for convenience.
-/// In other environments: requires an authenticated user with the SuperAdmin or Admin role.
+///
+/// * Development: anonymous access is allowed for easier local inspection.
+/// * Other environments: requires an authenticated user whose numeric role
+///   claim is &lt;= 2 (i.e. SuperAdmin=1 or Admin=2 - matches
+///   <see cref="LicenseManager.API.Authorization.Policies.Admin"/>).
+///
+/// Note: the project encodes roles as numeric strings on the JWT, not as
+/// named roles, so <c>IsInRole("Admin")</c> does not work here.
 /// </summary>
 public sealed class HangfireDashboardAuthorizationFilter : IDashboardAuthorizationFilter
 {
+    private const int AdminMaxRoleLevel = 2;
+
     private readonly IWebHostEnvironment _environment;
 
     public HangfireDashboardAuthorizationFilter(IWebHostEnvironment environment)
@@ -20,7 +29,6 @@ public sealed class HangfireDashboardAuthorizationFilter : IDashboardAuthorizati
     {
         var httpContext = context.GetHttpContext();
 
-        // Allow anonymous access in Development for easier inspection.
         if (_environment.IsDevelopment())
         {
             return true;
@@ -32,6 +40,7 @@ public sealed class HangfireDashboardAuthorizationFilter : IDashboardAuthorizati
             return false;
         }
 
-        return user.IsInRole("SuperAdmin") || user.IsInRole("Admin");
+        var roleClaim = user.FindFirst(ClaimTypes.Role)?.Value;
+        return int.TryParse(roleClaim, out var roleLevel) && roleLevel <= AdminMaxRoleLevel;
     }
 }

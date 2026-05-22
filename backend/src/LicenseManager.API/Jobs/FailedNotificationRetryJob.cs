@@ -1,4 +1,5 @@
 using Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 
 namespace LicenseManager.API.Jobs;
 
@@ -10,7 +11,7 @@ namespace LicenseManager.API.Jobs;
 /// surface (cron + dashboard tile) is complete; the actual retry logic lands
 /// once the Notifications entity exists (Phase 4B.4).
 /// </summary>
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 900 })]
+[CriticalRetry]
 [DisableConcurrentExecution(timeoutInSeconds: 60)]
 public sealed class FailedNotificationRetryJob
 {

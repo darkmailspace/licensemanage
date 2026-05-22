@@ -1,5 +1,6 @@
 using Hangfire;
 using LicenseManager.API.Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 using LicenseManager.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,7 @@ namespace LicenseManager.API.Jobs;
 /// AuditLog cleanup runs on its own (longer) cadence in
 /// <see cref="AuditLogCleanupJob"/>.
 /// </summary>
-[AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 120, 600 })]
+[BestEffortRetry]
 public sealed class DailyCleanupJob
 {
     private readonly IApplicationDbContext _db;

@@ -1,5 +1,6 @@
 using Hangfire;
 using LicenseManager.API.Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 using LicenseManager.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -11,7 +12,7 @@ namespace LicenseManager.API.Jobs;
 /// longer than transient API logs (default: 365 days), so it lives in its own
 /// job with its own retention knob.
 /// </summary>
-[AutomaticRetry(Attempts = 2, DelaysInSeconds = new[] { 300, 1800 })]
+[BestEffortRetry]
 public sealed class AuditLogCleanupJob
 {
     private readonly IApplicationDbContext _db;

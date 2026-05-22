@@ -1,4 +1,5 @@
 using Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 using LicenseManager.Application.Common.Interfaces;
 using LicenseManager.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,7 @@ namespace LicenseManager.API.Jobs;
 ///   * Already-GracePeriod licenses whose grace has elapsed are moved to
 ///     Expired.
 /// </summary>
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 900 })]
+[StandardRetry]
 public sealed class DailyLicenseValidationJob
 {
     private readonly IApplicationDbContext _db;

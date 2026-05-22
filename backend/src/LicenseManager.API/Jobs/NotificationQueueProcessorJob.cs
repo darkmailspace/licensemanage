@@ -1,4 +1,5 @@
 using Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 
 namespace LicenseManager.API.Jobs;
 
@@ -11,7 +12,7 @@ namespace LicenseManager.API.Jobs;
 /// the body is intentionally a no-op that emits a structured trace log so
 /// operators can confirm the job is firing on its 5-minute cadence.
 /// </summary>
-[AutomaticRetry(Attempts = 5, DelaysInSeconds = new[] { 30, 60, 120, 300, 600 })]
+[CriticalRetry]
 [DisableConcurrentExecution(timeoutInSeconds: 60)]
 public sealed class NotificationQueueProcessorJob
 {

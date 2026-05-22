@@ -1,5 +1,6 @@
 using Hangfire;
 using LicenseManager.API.Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 using LicenseManager.Application.Common.Interfaces;
 using LicenseManager.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ namespace LicenseManager.API.Jobs;
 /// ExpiryDate lands exactly N days from today (default: 30) so renewal
 /// follow-up can be triggered.
 /// </summary>
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 900 })]
+[StandardRetry]
 public sealed class LicenseExpiryWarning30DaysJob
 {
     private readonly IApplicationDbContext _db;

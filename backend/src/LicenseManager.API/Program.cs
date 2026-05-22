@@ -1,6 +1,9 @@
 using System.Text;
 using LicenseManager.API.Authorization;
 using LicenseManager.API.Hangfire;
+using LicenseManager.API.Hangfire.Alerts;
+using LicenseManager.API.Hangfire.Filters;
+using LicenseManager.API.Hangfire.Monitoring;
 using LicenseManager.API.Jobs;
 using LicenseManager.API.Middleware;
 using LicenseManager.Infrastructure;
@@ -74,6 +77,25 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.Configure<HangfireOptions>(
     builder.Configuration.GetSection(HangfireOptions.SectionName));
 
+builder.Services.Configure<FailedJobAlertOptions>(
+    builder.Configuration.GetSection(FailedJobAlertOptions.SectionName));
+
+// Backing store for the failed-job-alert throttler.
+builder.Services.AddMemoryCache();
+
+// Metrics + alert sinks for the Hangfire pipeline. JobMetrics is a singleton
+// (it owns instruments); alerters are scoped so future implementations
+// (email/webhook) can use scoped services like DbContext.
+builder.Services.AddSingleton<JobMetrics>();
+builder.Services.AddScoped<IFailedJobAlerter, LoggingFailedJobAlerter>();
+
+// Hangfire pipeline filters (server filters + state filters). Registered as
+// singletons because Hangfire holds onto a single instance for the lifetime
+// of the process and invokes them across all jobs.
+builder.Services.AddSingleton<JobLoggingFilter>();
+builder.Services.AddSingleton<JobMetricsFilter>();
+builder.Services.AddSingleton<FailedJobAlertFilter>();
+
 var hangfireConnectionString = builder.Configuration.GetConnectionString("Hangfire")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
@@ -98,6 +120,12 @@ builder.Services.AddHangfire((sp, config) =>
                 DistributedLockTimeout = TimeSpan.FromMinutes(1),
                 UseNativeDatabaseTransactions = true,
             });
+
+    // Wire global filters via DI so they can resolve scoped services
+    // (the alerter, in particular).
+    config.UseFilter(sp.GetRequiredService<JobLoggingFilter>());
+    config.UseFilter(sp.GetRequiredService<JobMetricsFilter>());
+    config.UseFilter(sp.GetRequiredService<FailedJobAlertFilter>());
 });
 
 builder.Services.AddHangfireServer(options =>

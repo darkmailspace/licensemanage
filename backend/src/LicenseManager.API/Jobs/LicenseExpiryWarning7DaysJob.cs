@@ -1,5 +1,6 @@
 using Hangfire;
 using LicenseManager.API.Hangfire;
+using LicenseManager.API.Hangfire.Retry;
 using LicenseManager.Application.Common.Interfaces;
 using LicenseManager.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ namespace LicenseManager.API.Jobs;
 /// 7-day urgent expiry warning. Runs daily; flags every active license whose
 /// ExpiryDate lands exactly N days from today (default: 7).
 /// </summary>
-[AutomaticRetry(Attempts = 3, DelaysInSeconds = new[] { 60, 300, 900 })]
+[StandardRetry]
 public sealed class LicenseExpiryWarning7DaysJob
 {
     private readonly IApplicationDbContext _db;
