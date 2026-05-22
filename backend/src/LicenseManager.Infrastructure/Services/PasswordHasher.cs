@@ -1,0 +1,34 @@
+using LicenseManager.Application.Common.Interfaces;
+
+namespace LicenseManager.Infrastructure.Services;
+
+/// <summary>
+/// BCrypt-based password hashing. Work factor 11 balances security and performance.
+/// </summary>
+public class PasswordHasher : IPasswordHasher
+{
+    private const int WorkFactor = 11;
+
+    public string Hash(string password)
+    {
+        if (string.IsNullOrEmpty(password))
+            throw new ArgumentException("Password cannot be empty", nameof(password));
+
+        return BCrypt.Net.BCrypt.HashPassword(password, WorkFactor);
+    }
+
+    public bool Verify(string password, string hash)
+    {
+        if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(hash))
+            return false;
+
+        try
+        {
+            return BCrypt.Net.BCrypt.Verify(password, hash);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}

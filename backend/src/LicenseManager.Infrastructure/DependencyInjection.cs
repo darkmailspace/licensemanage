@@ -1,6 +1,7 @@
 using LicenseManager.Application.Common.Interfaces;
 using LicenseManager.Infrastructure.Data;
 using LicenseManager.Infrastructure.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,11 +23,20 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(provider =>
             provider.GetRequiredService<ApplicationDbContext>());
 
-        // Services
+        // Core domain services
         services.AddScoped<ILicenseService, LicenseService>();
-        services.AddSingleton<ICryptographyService, CryptographyService>();
 
-        // Redis Cache (optional)
+        // Security services
+        services.AddSingleton<ICryptographyService, CryptographyService>();
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
+        services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<IMfaService, MfaService>();
+
+        // Current user (HttpContext-based)
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        // Redis cache (optional)
         var redisConnection = configuration.GetConnectionString("Redis");
         if (!string.IsNullOrEmpty(redisConnection))
         {

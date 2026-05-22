@@ -1,5 +1,7 @@
+using LicenseManager.API.Authorization;
 using LicenseManager.Application.Common.Interfaces;
 using LicenseManager.Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,22 +10,33 @@ namespace LicenseManager.API.Controllers;
 /// <summary>
 /// Customer self-service portal endpoints (/client).
 /// Customers can view their licenses, renew, upgrade, manage tickets and invoices.
+/// All endpoints require a valid customer JWT except [AllowAnonymous] auth ones.
 /// </summary>
 [ApiController]
 [Route("api/customer-portal")]
+[Authorize]
 public class CustomerPortalController : ControllerBase
 {
     private readonly IApplicationDbContext _context;
     private readonly ILicenseService _licenseService;
+    private readonly IPasswordHasher _passwordHasher;
+    private readonly IJwtTokenService _jwt;
+    private readonly ICurrentUserService _currentUser;
     private readonly ILogger<CustomerPortalController> _logger;
 
     public CustomerPortalController(
         IApplicationDbContext context,
         ILicenseService licenseService,
+        IPasswordHasher passwordHasher,
+        IJwtTokenService jwt,
+        ICurrentUserService currentUser,
         ILogger<CustomerPortalController> logger)
     {
         _context = context;
         _licenseService = licenseService;
+        _passwordHasher = passwordHasher;
+        _jwt = jwt;
+        _currentUser = currentUser;
         _logger = logger;
     }
 
@@ -32,6 +45,7 @@ public class CustomerPortalController : ControllerBase
     // =====================================================================
 
     [HttpPost("auth/login")]
+    [AllowAnonymous]
     public async Task<IActionResult> Login(
         [FromBody] CustomerLoginRequest request,
         CancellationToken cancellationToken)
@@ -44,17 +58,19 @@ public class CustomerPortalController : ControllerBase
         if (customer == null)
             return Unauthorized(new { success = false, error = "Invalid email or password" });
 
-        // In a production system, password hashing/verification happens here.
-        // For Phase 3, we authenticate any active customer that exists.
-
-        var accessToken = GenerateClientToken(customer.Id);
+        // Customer authentication via JWT.
+        // For Phase 3 we accept any active customer (passwords come in Phase 4 with
+        // a customer_credentials table). The token is signed and verifiable.
+        var tokens = _jwt.Generate(customer);
 
         return Ok(new
         {
             success = true,
             data = new
             {
-                accessToken,
+                accessToken = tokens.AccessToken,
+                refreshToken = tokens.RefreshToken,
+                expiresIn = tokens.ExpiresInSeconds,
                 user = new
                 {
                     id = customer.Id,
@@ -70,7 +86,8 @@ public class CustomerPortalController : ControllerBase
     }
 
     [HttpPost("auth/forgot-password")]
-    public IActionResult ForgotPassword([FromBody] ForgotPasswordRequest request)
+    [AllowAnonymous]
+    public IActionResult ForgotPassword([FromBody] CustomerForgotPasswordRequest request)
     {
         // In production this would generate a reset token and send email.
         _logger.LogInformation("Password reset requested for {Email}", request.Email);
@@ -78,15 +95,17 @@ public class CustomerPortalController : ControllerBase
     }
 
     [HttpPost("auth/logout")]
+    [Authorize]
     public IActionResult Logout()
     {
         return Ok(new { success = true });
     }
 
     [HttpGet("auth/me")]
+    [Authorize]
     public async Task<IActionResult> Me(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var customer = await _context.Customers.FindAsync(new object[] { customerId.Value }, cancellationToken);
@@ -114,7 +133,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("dashboard")]
     public async Task<IActionResult> Dashboard(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var licenses = await _context.Licenses
@@ -157,7 +176,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("licenses")]
     public async Task<IActionResult> GetLicenses(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var licenses = await _context.Licenses
@@ -190,7 +209,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("licenses/{id}")]
     public async Task<IActionResult> GetLicense(Guid id, CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var license = await _context.Licenses
@@ -210,7 +229,7 @@ public class CustomerPortalController : ControllerBase
         [FromBody] RenewRequest request,
         CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var license = await _context.Licenses
@@ -236,7 +255,7 @@ public class CustomerPortalController : ControllerBase
         [FromBody] UpgradeRequest request,
         CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var license = await _context.Licenses
@@ -267,7 +286,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("licenses/{licenseId}/domains")]
     public async Task<IActionResult> GetDomains(Guid licenseId, CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var domains = await _context.LicenseDomains
@@ -293,7 +312,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("licenses/{licenseId}/devices")]
     public async Task<IActionResult> GetDevices(Guid licenseId, CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var devices = await _context.LicenseDevices
@@ -324,7 +343,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("updates")]
     public async Task<IActionResult> GetUpdates(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var productIds = await _context.Licenses
@@ -358,7 +377,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("updates/{versionId}/download")]
     public async Task<IActionResult> DownloadUpdate(Guid versionId, CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var version = await _context.ProductVersions
@@ -399,7 +418,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("tickets")]
     public async Task<IActionResult> GetTickets(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var tickets = await _context.SupportTickets
@@ -426,7 +445,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("tickets/{id}")]
     public async Task<IActionResult> GetTicket(Guid id, CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var ticket = await _context.SupportTickets
@@ -445,7 +464,7 @@ public class CustomerPortalController : ControllerBase
         [FromBody] CreateTicketRequest request,
         CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         if (string.IsNullOrWhiteSpace(request.Subject) || string.IsNullOrWhiteSpace(request.Description))
@@ -480,7 +499,7 @@ public class CustomerPortalController : ControllerBase
         [FromBody] AddCommentRequest request,
         CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var ticket = await _context.SupportTickets
@@ -510,7 +529,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("invoices")]
     public async Task<IActionResult> GetInvoices(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         // Synthesise invoices from license history. A production system would
@@ -561,7 +580,7 @@ public class CustomerPortalController : ControllerBase
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile(CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var customer = await _context.Customers
@@ -577,7 +596,7 @@ public class CustomerPortalController : ControllerBase
         [FromBody] UpdateProfileRequest request,
         CancellationToken cancellationToken)
     {
-        var customerId = GetCustomerIdFromHeader();
+        var customerId = _currentUser.UserId;
         if (customerId == null) return Unauthorized();
 
         var customer = await _context.Customers
@@ -599,34 +618,12 @@ public class CustomerPortalController : ControllerBase
     // HELPERS
     // =====================================================================
 
-    private Guid? GetCustomerIdFromHeader()
-    {
-        // In production: extract from validated JWT claims.
-        // For Phase 3 we accept a customer id via the X-Customer-Id header
-        // or fall back to the bearer token (which is the customer id).
-        var fromHeader = Request.Headers["X-Customer-Id"].FirstOrDefault();
-        if (Guid.TryParse(fromHeader, out var headerGuid)) return headerGuid;
-
-        var auth = Request.Headers.Authorization.FirstOrDefault();
-        if (auth?.StartsWith("Bearer ") == true)
-        {
-            var token = auth.Substring("Bearer ".Length);
-            if (Guid.TryParse(token, out var bearerGuid)) return bearerGuid;
-        }
-
-        return null;
-    }
-
-    private static string GenerateClientToken(Guid customerId)
-    {
-        // Placeholder. In production, sign a JWT with appropriate claims.
-        return customerId.ToString();
-    }
+    // Customer ID is read from validated JWT claims via ICurrentUserService.UserId
 }
 
-// DTOs
+// DTOs (suffixed with "Customer" where they conflict with admin AuthDtos)
 public record CustomerLoginRequest(string Email, string Password);
-public record ForgotPasswordRequest(string Email);
+public record CustomerForgotPasswordRequest(string Email);
 public record RenewRequest(int Months);
 public record UpgradeRequest(int NewLicenseType);
 public record CreateTicketRequest(string Subject, string Description, int Priority, Guid? LicenseId);

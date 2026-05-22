@@ -24,6 +24,7 @@ public interface IApplicationDbContext
     DbSet<TicketComment> TicketComments { get; }
     DbSet<AuditLog> AuditLogs { get; }
     DbSet<ApiLog> ApiLogs { get; }
-    
+    DbSet<SystemSetting> SystemSettings { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

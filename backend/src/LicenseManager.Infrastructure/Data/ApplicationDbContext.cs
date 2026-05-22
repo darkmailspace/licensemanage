@@ -30,6 +30,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<ApiLog> ApiLogs => Set<ApiLog>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -55,6 +56,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<TicketComment>().ToTable("ticket_comments");
         modelBuilder.Entity<AuditLog>().ToTable("audit_logs");
         modelBuilder.Entity<ApiLog>().ToTable("api_logs");
+        modelBuilder.Entity<SystemSetting>().ToTable("system_settings");
 
         // Configure naming convention for PostgreSQL (snake_case)
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
@@ -210,6 +212,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
         modelBuilder.Entity<AdminUser>()
             .HasIndex(au => au.Email)
+            .IsUnique();
+
+        modelBuilder.Entity<SystemSetting>()
+            .HasIndex(s => s.Key)
             .IsUnique();
 
         // Performance indexes

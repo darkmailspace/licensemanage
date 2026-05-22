@@ -4,20 +4,21 @@
 
 -- =============================================================================
 -- SEED ADMIN USER (Password: Admin@123456)
+-- BCrypt hash with work factor 11
 -- =============================================================================
 INSERT INTO admin_users (
     id, email, password_hash, full_name, role, is_active, email_verified, email_verified_at, created_at
 ) VALUES (
     uuid_generate_v4(),
     'admin@licensemanager.com',
-    '$2a$11$3H8vXQz6.DqQZJrQP.fRheZE3Y6kVqVXf5xKYC7jKXQGf2nWZvYxm', -- Admin@123456
+    '$2b$11$npJumMhrgcrIGV.jJpMHF.O6nO4oWAm7F95Ch8nynrRlxj4yvytk6', -- Admin@123456 (BCrypt, work factor 11)
     'System Administrator',
     1, -- SuperAdmin
     TRUE,
     TRUE,
     NOW(),
     NOW()
-);
+) ON CONFLICT (email) DO NOTHING;
 
 -- =============================================================================
 -- SEED LICENSE FEATURES

@@ -11,7 +11,7 @@ namespace LicenseManager.API.Controllers;
 /// All endpoints check for an installation lock file before allowing modifications.
 /// </summary>
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/installer")]
 public class InstallerController : ControllerBase
 {
     private readonly IApplicationDbContext _context;
