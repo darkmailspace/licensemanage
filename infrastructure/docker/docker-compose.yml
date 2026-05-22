@@ -108,6 +108,57 @@ services:
       - licensemanager-network
     restart: unless-stopped
 
+  # Admin Panel (Next.js)
+  admin-panel:
+    build:
+      context: ../../frontend/admin-panel
+      dockerfile: Dockerfile
+    container_name: licensemanager-admin-panel
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    networks:
+      - licensemanager-network
+    restart: unless-stopped
+
+  # Installer System (Next.js, served at /install)
+  installer:
+    build:
+      context: ../../frontend/installer
+      dockerfile: Dockerfile
+    container_name: licensemanager-installer
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+    networks:
+      - licensemanager-network
+    restart: unless-stopped
+
+  # Customer Portal (Next.js, served at /client)
+  customer-portal:
+    build:
+      context: ../../frontend/customer-portal
+      dockerfile: Dockerfile
+    container_name: licensemanager-customer-portal
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    ports:
+      - "3002:3002"
+    depends_on:
+      - api
+    networks:
+      - licensemanager-network
+    restart: unless-stopped
+
 networks:
   licensemanager-network:
     driver: bridge
