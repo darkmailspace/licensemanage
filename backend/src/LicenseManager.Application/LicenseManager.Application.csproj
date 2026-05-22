@@ -13,6 +13,14 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
     <PackageReference Include="AutoMapper" Version="13.0.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <!--
+      EF Core is referenced from the Application layer because
+      Common/Interfaces/IApplicationDbContext.cs exposes DbSet<T> as part
+      of the contract the Infrastructure ApplicationDbContext must satisfy.
+      Kept at the same major as Microsoft.EntityFrameworkCore in the
+      Infrastructure project to avoid a dual-version warning at restore.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
