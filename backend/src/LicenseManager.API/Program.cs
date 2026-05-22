@@ -1,6 +1,7 @@
 using System.Text;
 using LicenseManager.API.Authorization;
 using LicenseManager.API.Hangfire;
+using LicenseManager.API.Jobs;
 using LicenseManager.API.Middleware;
 using LicenseManager.Infrastructure;
 using Hangfire;
@@ -68,8 +69,11 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // =============================================================================
-// HANGFIRE (Background jobs - storage, server, dashboard auth filter)
+// HANGFIRE (Background jobs - storage, server, dashboard auth filter, jobs)
 // =============================================================================
+builder.Services.Configure<HangfireOptions>(
+    builder.Configuration.GetSection(HangfireOptions.SectionName));
+
 var hangfireConnectionString = builder.Configuration.GetConnectionString("Hangfire")
     ?? builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
@@ -110,6 +114,16 @@ builder.Services.AddHangfireServer(options =>
 });
 
 builder.Services.AddSingleton<HangfireDashboardAuthorizationFilter>();
+
+// Recurring job classes (Hangfire activates these per execution via DI scope).
+builder.Services.AddScoped<LicenseExpiryReminderJob>();
+builder.Services.AddScoped<LicenseExpiryWarning30DaysJob>();
+builder.Services.AddScoped<LicenseExpiryWarning7DaysJob>();
+builder.Services.AddScoped<DailyLicenseValidationJob>();
+builder.Services.AddScoped<DailyCleanupJob>();
+builder.Services.AddScoped<AuditLogCleanupJob>();
+builder.Services.AddScoped<NotificationQueueProcessorJob>();
+builder.Services.AddScoped<FailedNotificationRetryJob>();
 
 // CORS
 builder.Services.AddCors(options =>
@@ -212,6 +226,10 @@ app.UseHangfireDashboard(hangfireDashboardPath, new DashboardOptions
     DisplayStorageConnectionString = false,
     IgnoreAntiforgeryToken = false,
 });
+
+// Register/refresh every recurring job after the host is built. AddOrUpdate is
+// idempotent, so this is safe to run on every startup.
+RecurringJobScheduler.RegisterAll(app.Services);
 
 app.MapControllers();
 
