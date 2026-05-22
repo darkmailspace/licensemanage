@@ -26,5 +26,10 @@ public interface IApplicationDbContext
     DbSet<ApiLog> ApiLogs { get; }
     DbSet<SystemSetting> SystemSettings { get; }
 
+    // Payments (Phase 4C)
+    DbSet<Payment> Payments { get; }
+    DbSet<Refund> Refunds { get; }
+    DbSet<WebhookEvent> WebhookEvents { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

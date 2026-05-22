@@ -32,6 +32,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<ApiLog> ApiLogs => Set<ApiLog>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
+    // Payments (Phase 4C)
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<Refund> Refunds => Set<Refund>();
+    public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -58,6 +63,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         modelBuilder.Entity<ApiLog>().ToTable("api_logs");
         modelBuilder.Entity<SystemSetting>().ToTable("system_settings");
 
+        // Phase 4C - payments
+        modelBuilder.Entity<Payment>().ToTable("payments");
+        modelBuilder.Entity<Refund>().ToTable("refunds");
+        modelBuilder.Entity<WebhookEvent>().ToTable("webhook_events");
+
         // Configure naming convention for PostgreSQL (snake_case)
         foreach (var entity in modelBuilder.Model.GetEntityTypes())
         {
@@ -75,6 +85,100 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         
         // Configure value conversions for enums
         ConfigureEnums(modelBuilder);
+
+        // Phase 4C - payments
+        ConfigurePayments(modelBuilder);
+    }
+
+    private static void ConfigurePayments(ModelBuilder modelBuilder)
+    {
+        // Payment ----------------------------------------------------------
+        modelBuilder.Entity<Payment>(b =>
+        {
+            b.Property(p => p.Provider).HasConversion<int>();
+            b.Property(p => p.Status).HasConversion<int>();
+            b.Property(p => p.Currency).HasMaxLength(3).IsRequired();
+            b.Property(p => p.Amount).HasPrecision(18, 2);
+            b.Property(p => p.ProviderPaymentId).HasMaxLength(128);
+            b.Property(p => p.ProviderOrderId).HasMaxLength(128);
+            b.Property(p => p.ProviderCustomerId).HasMaxLength(128);
+            b.Property(p => p.ClientSecret).HasMaxLength(512);
+            b.Property(p => p.CheckoutUrl).HasMaxLength(2048);
+            b.Property(p => p.Receipt).HasMaxLength(64);
+            b.Property(p => p.Description).HasMaxLength(512);
+            b.Property(p => p.ErrorCode).HasMaxLength(128);
+            b.Property(p => p.ErrorMessage).HasMaxLength(2048);
+
+            // Free-form metadata persisted as JSON (jsonb on PostgreSQL).
+            var metadataConverter = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<
+                Dictionary<string, string>?, string?>(
+                v => v == null ? null : System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?)null),
+                v => string.IsNullOrEmpty(v)
+                    ? null
+                    : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(v, (System.Text.Json.JsonSerializerOptions?)null));
+
+            b.Property(p => p.Metadata)
+                .HasConversion(metadataConverter)
+                .HasColumnType("jsonb");
+
+            // Payment -> Customer (unidirectional - we don't add a Payments
+            // collection on Customer to avoid touching that entity).
+            b.HasOne(p => p.Customer)
+                .WithMany()
+                .HasForeignKey(p => p.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Payment -> License (optional)
+            b.HasOne(p => p.License)
+                .WithMany()
+                .HasForeignKey(p => p.LicenseId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Lookup indexes for the queries the service performs.
+            b.HasIndex(p => new { p.Provider, p.ProviderPaymentId });
+            b.HasIndex(p => new { p.Provider, p.ProviderOrderId });
+            b.HasIndex(p => p.CustomerId);
+            b.HasIndex(p => p.LicenseId);
+            b.HasIndex(p => p.Status);
+            b.HasIndex(p => p.CreatedAt);
+        });
+
+        // Refund -----------------------------------------------------------
+        modelBuilder.Entity<Refund>(b =>
+        {
+            b.Property(r => r.Status).HasConversion<int>();
+            b.Property(r => r.Currency).HasMaxLength(3).IsRequired();
+            b.Property(r => r.Amount).HasPrecision(18, 2);
+            b.Property(r => r.ProviderRefundId).HasMaxLength(128);
+            b.Property(r => r.Reason).HasMaxLength(256);
+            b.Property(r => r.ErrorMessage).HasMaxLength(2048);
+
+            b.HasOne(r => r.Payment)
+                .WithMany(p => p.Refunds)
+                .HasForeignKey(r => r.PaymentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(r => r.PaymentId);
+            b.HasIndex(r => r.ProviderRefundId);
+            b.HasIndex(r => r.Status);
+        });
+
+        // WebhookEvent -----------------------------------------------------
+        modelBuilder.Entity<WebhookEvent>(b =>
+        {
+            b.Property(w => w.Provider).HasConversion<int>();
+            b.Property(w => w.Status).HasConversion<int>();
+            b.Property(w => w.ProviderEventId).HasMaxLength(128).IsRequired();
+            b.Property(w => w.EventType).HasMaxLength(128).IsRequired();
+            b.Property(w => w.Signature).HasMaxLength(2048);
+            b.Property(w => w.ErrorMessage).HasMaxLength(2048);
+
+            // Idempotency: at-most-once processing per (Provider, EventId).
+            b.HasIndex(w => new { w.Provider, w.ProviderEventId }).IsUnique();
+            b.HasIndex(w => w.Status);
+            b.HasIndex(w => w.ReceivedAt);
+            b.HasIndex(w => w.PaymentId);
+        });
     }
 
     private void ConfigureRelationships(ModelBuilder modelBuilder)
