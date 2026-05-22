@@ -1,5 +1,6 @@
 using LicenseManager.API.Authorization;
 using LicenseManager.Application.Common.Interfaces;
+using LicenseManager.Domain.Entities;
 using LicenseManager.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

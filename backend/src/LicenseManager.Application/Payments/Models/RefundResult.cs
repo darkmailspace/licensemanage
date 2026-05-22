@@ -2,7 +2,10 @@ using LicenseManager.Domain.Enums;
 
 namespace LicenseManager.Application.Payments.Models;
 
-public sealed class RefundResult
+// RefundResult uses 'record' (not 'class') so PaymentService can return
+// `result with { RefundId = refund.Id }` after persistence assigns the
+// generated refund id. The 'with' operator is record-only.
+public sealed record RefundResult
 {
     public bool Success { get; init; }
     public Guid RefundId { get; init; }

@@ -62,7 +62,7 @@ public class AdminController : ControllerBase
             .Select(u => new AdminUserListItem(
                 u.Id, u.Email, u.FullName, u.Phone,
                 (int)u.Role, u.Role.ToString(),
-                u.IsActive, u.MfaEnabled, u.EmailVerified,
+                u.IsActive, u.MFAEnabled, u.EmailVerified,
                 u.LastLoginAt, u.CreatedAt))
             .ToListAsync(cancellationToken);
 
@@ -82,7 +82,7 @@ public class AdminController : ControllerBase
         return Ok(ApiResponse<AdminUserListItem>.Ok(new AdminUserListItem(
             user.Id, user.Email, user.FullName, user.Phone,
             (int)user.Role, user.Role.ToString(),
-            user.IsActive, user.MfaEnabled, user.EmailVerified,
+            user.IsActive, user.MFAEnabled, user.EmailVerified,
             user.LastLoginAt, user.CreatedAt)));
     }
 

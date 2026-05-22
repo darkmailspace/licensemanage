@@ -23,9 +23,47 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Otp.NET" Version="1.4.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
     <PackageReference Include="Stripe.net" Version="51.1.0" />
+    <!--
+      Build-fix (post Phase 4C).
+
+      Removed:  Microsoft.AspNetCore.Http.Abstractions 2.3.0
+                Legacy ASP.NET Core 2.x package - was missing the .NET 9
+                surface this project actually uses:
+                  - the IServiceCollection.AddHttpContextAccessor() extension
+                  - the strongly-typed IHeaderDictionary.UserAgent accessor
+                    introduced in ASP.NET Core 6.0
+                Keeping it pinned to 2.3.0 against a .NET 9 codebase causes
+                the CS1061 errors in DependencyInjection.cs and
+                CurrentUserService.cs.
+
+      Added:    FrameworkReference Microsoft.AspNetCore.App
+                The supported way for a class library to consume the
+                modern ASP.NET Core 9 surface (IHttpContextAccessor, the
+                modern IHeaderDictionary, the DI extensions). The entry
+                point LicenseManager.API is Microsoft.NET.Sdk.Web so the
+                ASP.NET Core runtime is already present at deploy time;
+                this only changes how those types are linked at compile
+                time. Marked PrivateAssets=all so the framework reference
+                does not propagate to non-web consumers (there are none
+                today, but it is the safe default).
+
+      Added:    Microsoft.Extensions.Caching.StackExchangeRedis 9.0.0
+                Provides services.AddStackExchangeRedisCache(). This
+                extension is NOT part of Microsoft.AspNetCore.App and
+                was never referenced before, so the call in
+                DependencyInjection.cs failed to compile. The package
+                pulls StackExchange.Redis as a transitive dep but we
+                keep the explicit reference above for version pinning.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App">
+      <PrivateAssets>all</PrivateAssets>
+    </FrameworkReference>
   </ItemGroup>
 
   <ItemGroup>

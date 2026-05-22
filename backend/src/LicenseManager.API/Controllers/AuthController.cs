@@ -86,7 +86,7 @@ public class AuthController : ControllerBase
         user.LockedUntil = null;
 
         // MFA required
-        if (user.MfaEnabled)
+        if (user.MFAEnabled)
         {
             await _db.SaveChangesAsync(cancellationToken);
             return Ok(ApiResponse<LoginResponse>.Ok(new LoginResponse { RequiresMfa = true }));
@@ -108,7 +108,7 @@ public class AuthController : ControllerBase
             .FirstOrDefaultAsync(u => u.Email == request.Email && !u.IsDeleted && u.IsActive,
                 cancellationToken);
 
-        if (user == null || !user.MfaEnabled || string.IsNullOrEmpty(user.MFASecret))
+        if (user == null || !user.MFAEnabled || string.IsNullOrEmpty(user.MFASecret))
             return Unauthorized(ApiResponse<LoginResponse>.Fail("MFA verification failed"));
 
         var verified = _mfa.VerifyCode(user.MFASecret, request.Code);
@@ -322,7 +322,7 @@ public class AuthController : ControllerBase
         if (!_mfa.VerifyCode(user.MFASecret, request.Code))
             return BadRequest(ApiResponse.Fail("Invalid verification code"));
 
-        user.MfaEnabled = true;
+        user.MFAEnabled = true;
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(ApiResponse.Ok("MFA enabled"));
@@ -344,7 +344,7 @@ public class AuthController : ControllerBase
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
             return BadRequest(ApiResponse.Fail("Password is incorrect"));
 
-        user.MfaEnabled = false;
+        user.MFAEnabled = false;
         user.MFASecret = null;
         user.MFABackupCodes = null;
         await _db.SaveChangesAsync(cancellationToken);
@@ -397,5 +397,5 @@ public class AuthController : ControllerBase
 
     private static AuthUserDto MapAuthUser(AdminUser u) => new(
         u.Id, u.Email, u.FullName, (int)u.Role, u.Role.ToString(),
-        u.MfaEnabled, u.EmailVerified, u.LastLoginAt);
+        u.MFAEnabled, u.EmailVerified, u.LastLoginAt);
 }
