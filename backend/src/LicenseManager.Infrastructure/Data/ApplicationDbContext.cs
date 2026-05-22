@@ -19,7 +19,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<LicenseDomain> LicenseDomains => Set<LicenseDomain>();
     public DbSet<LicenseDevice> LicenseDevices => Set<LicenseDevice>();
     public DbSet<LicenseActivation> LicenseActivations => Set<LicenseActivation>();
-    public DbSet<LicenseValidation> LicenseValidations => Set<LicenseValidations>();
+    public DbSet<LicenseValidation> LicenseValidations => Set<LicenseValidation>();
     public DbSet<Feature> Features => Set<Feature>();
     public DbSet<LicenseFeatureMapping> LicenseFeatureMappings => Set<LicenseFeatureMapping>();
     public DbSet<ProductFeature> ProductFeatures => Set<ProductFeature>();
